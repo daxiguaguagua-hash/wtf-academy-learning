@@ -83,3 +83,62 @@ contract FunctionOutputsV2 {
         return (i, b, j, x, z);
     }
 }
+
+/**
+ * @notice storage和memory的区别：
+ * @notice storage：存储在区块链上，修改会改变链上状态
+ * @notice memory：存储在内存中，修改不会改变链上状态
+ */
+contract DataStorage {
+    uint256[] public numbers = [1, 2, 3];
+
+    function getNumbers() public view returns (uint256[] memory) {
+        return numbers;
+    }
+
+    function changeWithStorage() public {
+        uint256[] storage nums = numbers;
+        nums[0] = 100;
+    }
+
+    function changeWithMemory() public view returns (uint256[] memory) {
+        uint256[] memory nums = numbers;
+        nums[0] = 999;
+        return nums;
+    }
+}
+
+contract DataLocations {
+    /**
+     * @notice 获取合约里面的numbers使用的命令是：
+     *  cast call 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 "numbers(uint256)(uint256)" 0 \
+     *  --rpc-url http://127.0.0.1:8545
+     *  因为这里public numbers会生成一个类似于getter的函数，所以要这样使用。这里的第一个uint256是getters的传入参数，uint256是返回值。
+     */
+    uint256[] public numbers = [1, 2, 3];
+
+    function getNumbers() public view returns (uint256[] memory) {
+        return numbers;
+    }
+
+    function changeWithStorage() public {
+        uint256[] storage nums = numbers;
+        nums[0] = 100;
+    }
+
+    function changeWithMemory() public view returns (uint256[] memory) {
+        uint256[] memory nums = numbers;
+        nums[0] = 999;
+        return nums;
+    }
+
+    /**
+     * @notice 这里的external主要是给合约外部调用。相对的还有public、internal、private等修饰符。
+     * @notice public 合约内外都能调用/internal只有当前合约和子合约能调用/private只有当前合约内部能够调用。
+     */
+    function sum(uint256[] calldata arr) external pure returns (uint256 total) {
+        for (uint256 i = 0; i < arr.length; i++) {
+            total += arr[i];
+        }
+    }
+}
