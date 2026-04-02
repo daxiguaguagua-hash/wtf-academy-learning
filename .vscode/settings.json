@@ -4,7 +4,9 @@
     "hello-web3/lib",
     "hello-web3/node_modules"
   ],
-  "solidity.remappings": [
-    "forge-std/=hello-web3/lib/forge-std/src/"
-  ]
+  "solidity.remappings": ["forge-std/=hello-web3/lib/forge-std/src/"],
+  "[solidity]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "JuanBlanco.solidity"
+  }
 }
