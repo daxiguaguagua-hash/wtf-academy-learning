@@ -6,9 +6,14 @@ contract ConstantDemo {
     uint256 public constant MY_NUMBER = 123;
 
     // 不可变变量
-    address public immutable owner;
+    address public immutable OWNER;
 
     constructor() {
-        owner = msg.sender; // 在构造函数中设置不可变变量
+        OWNER = msg.sender; // 在构造函数中设置不可变变量
+    }
+
+    function tryChange() public {
+        // MY_NUMBER = 456;
+        // OWNER = msg.sender;
     }
 }
