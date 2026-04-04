@@ -135,6 +135,7 @@ contract DataLocations {
     /**
      * @notice 这里的external主要是给合约外部调用。相对的还有public、internal、private等修饰符。
      * @notice public 合约内外都能调用/internal只有当前合约和子合约能调用/private只有当前合约内部能够调用。
+     * @notice calldata，表示外部传入的只读参数。
      */
     function sum(uint256[] calldata arr) external pure returns (uint256 total) {
         for (uint256 i = 0; i < arr.length; i++) {

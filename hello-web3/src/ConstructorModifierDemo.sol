@@ -9,6 +9,7 @@ contract ConstructorModifierDemo {
         owner = msg.sender;
     }
 
+    // 这是一个鉴权用的modifier，只有合约部署者（owner）才能调用被这个modifier修饰的函数。
     modifier onlyOwner() {
         // require(msg.sender == owner, "Not the owner");
         _onlyOwner();
