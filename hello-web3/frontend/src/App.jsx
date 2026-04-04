@@ -31,6 +31,11 @@ const publicClient = createPublicClient({
   transport: http("http://127.0.0.1:8545"),
 });
 
+/**
+ * 读合约通常不需要钱包，因为它只是对链上状态做只读查询，不会产生交易，也不需要签名。
+ * 写合约会修改链上状态，本质上是发送一笔交易，所以必须由用户钱包签名，并由该账户承担 gas。
+ * @returns 
+ */
 function App() {
   const [count, setCount] = useState("-");
   const [owner, setOwner] = useState("-");
