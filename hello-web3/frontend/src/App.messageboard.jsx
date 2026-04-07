@@ -11,7 +11,8 @@ import { foundry } from "viem/chains";
 import "./App.css";
 
 /**
- * 这是 MessageBoard.sol 当前部署后的合约地址
+ * MessageBoard 版本归档
+ * 当前 App.jsx 的留言板实现可以从这里恢复
  */
 const contractAddress = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
 
@@ -37,13 +38,6 @@ const abi = [
   },
   {
     type: "function",
-    name: "author",
-    inputs: [],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
     name: "message",
     inputs: [],
     outputs: [{ name: "", type: "string", internalType: "string" }],
@@ -65,7 +59,6 @@ const publicClient = createPublicClient({
 
 function App() {
   const [message, setMessage] = useState("-");
-  const [author, setAuthor] = useState("-");
   const [draftMessage, setDraftMessage] = useState("Hello from frontend!");
   const [account, setAccount] = useState("");
   const [status, setStatus] = useState("正在读取链上留言...");
@@ -76,7 +69,7 @@ function App() {
   async function loadMessage() {
     try {
       setIsLoading(true);
-      setStatus("正在读取最新 message 和 author...");
+      setStatus("正在读取最新 message...");
 
       const currentMessage = await publicClient.readContract({
         address: contractAddress,
@@ -84,14 +77,7 @@ function App() {
         functionName: "message",
       });
 
-      const currentAuthor = await publicClient.readContract({
-        address: contractAddress,
-        abi,
-        functionName: "author",
-      });
-
       setMessage(currentMessage);
-      setAuthor(currentAuthor);
       setStatus("读取成功");
     } catch (error) {
       console.error(error);
@@ -151,10 +137,6 @@ function App() {
 
       if (rejectedError) {
         return "你在钱包里取消了这笔交易。";
-      }
-
-      if (error.message.includes("Empty message")) {
-        return "留言不能为空。";
       }
 
       if (error.shortMessage) {
@@ -294,11 +276,6 @@ function App() {
         <div className="panel">
           <span className="label">当前 message</span>
           <span className="value">{message}</span>
-        </div>
-
-        <div className="panel">
-          <span className="label">当前 author</span>
-          <span className="value">{author}</span>
         </div>
 
         <div className="panel panel-column">
