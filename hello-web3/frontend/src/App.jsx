@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import {
+  UserRejectedRequestError,
+  ContractFunctionRevertedError,
   BaseError,
-  ContractFunctionExecutionError,
   createPublicClient,
   createWalletClient,
   custom,
@@ -147,21 +148,79 @@ function App() {
 
   function getReadableErrorMessage(error) {
     if (error instanceof BaseError) {
-      const revertError = error.walk(
-        (err) => err instanceof ContractFunctionExecutionError,
+      const rejectedError = error.walk(
+        (err) => err instanceof UserRejectedRequestError,
       );
 
-      if (revertError?.cause?.name === "NotOwner") {
+      if (rejectedError) {
+        return "你在钱包里取消了这笔交易。";
+      }
+
+      const revertedError = error.walk(
+        (err) => err instanceof ContractFunctionRevertedError,
+      );
+
+      console.log("ContractFunctionRevertedError 数据", revertedError);
+
+      if (revertedError?.data?.errorName === "NotOwner") {
         return "只有 owner 才能调用 setCount()。";
       }
 
-      if (revertError?.cause?.name === "CountTooSmall") {
-        const [currentCount, requestedCount] = revertError.cause.args ?? [];
+      if (revertedError?.data?.errorName === "CountTooSmall") {
+        const [currentCount, requestedCount] = revertedError.data.args ?? [];
         return `输入值太小。当前 count 是 ${currentCount?.toString()}，你传入的是 ${requestedCount?.toString()}。`;
+      }
+
+      // ABI 没完全命中时，退回到 message 文本兜底。
+      if (error.message.includes("NotOwner")) {
+        return "只有 owner 才能调用 setCount()。";
+      }
+
+      if (error.message.includes("CountTooSmall")) {
+        return "输入值太小，setCount(5) 没有通过合约校验。";
+      }
+
+      if (error.shortMessage) {
+        return `交易失败：${error.shortMessage}`;
       }
     }
 
     return "交易失败，请检查钱包确认状态或控制台报错。";
+  }
+
+  function getDecodedContractError(error) {
+    if (!(error instanceof BaseError)) return null;
+
+    const revertedError = error.walk(
+      (err) => err.name === "ContractFunctionRevertedError",
+    );
+
+    if (!revertedError?.data?.errorName) return null;
+
+    return {
+      name: revertedError.data.errorName,
+      args: revertedError.data.args ?? [],
+    };
+  }
+
+  function getSetCountExpectation() {
+    if (!account) {
+      return "先连接钱包，再测试 setCount(5) 的成功或失败分支。";
+    }
+
+    if (owner === "-" || count === "-") {
+      return "请先读取最新链上数据。";
+    }
+
+    if (account.toLowerCase() !== owner.toLowerCase()) {
+      return "当前账户不是 owner，合约预计抛出 NotOwner()。";
+    }
+
+    if (Number(count) >= 5) {
+      return `当前账户虽然是 owner，但 5 小于等于当前 count=${count}，合约预计抛出 CountTooSmall(...)。`;
+    }
+
+    return "当前条件满足，setCount(5) 预计成功。";
   }
 
   async function ensureCorrectChain() {
@@ -233,24 +292,31 @@ function App() {
       return;
     }
 
-    if (account.toLowerCase() !== owner.toLowerCase()) {
-      setStatus("setCount(5) 失败：当前钱包不是owner。");
-      return;
-    }
-
-    if (Number(count) >= 5) {
-      setStatus(
-        `setCount(5) 失败：当前 count 已经是 ${count}，不能设施成更小的 5。`,
-      );
-      return;
-    }
-
     try {
       setIsWriting(true);
-      setStatus("请在钱包中确认 setCount(5) 交易...");
+      setStatus(`准备发送 setCount(5)。预期结果：${getSetCountExpectation()}`);
 
       const isCorrectChain = await ensureCorrectChain();
       if (!isCorrectChain) return;
+
+      try {
+        await publicClient.simulateContract({
+          account,
+          address: contractAddress,
+          abi,
+          functionName: "setCount",
+          args: [5n],
+        });
+      } catch (error) {
+        const decodedError = getDecodedContractError(error);
+
+        console.error("SetCount 预执行失败", error);
+        if (decodedError) {
+          console.log("SetCount 预执行解码后的合约错误", decodedError);
+        }
+        setStatus(getReadableErrorMessage(error));
+        return;
+      }
 
       const walletClient = await createAppWalletClient();
 
@@ -269,7 +335,7 @@ function App() {
       console.log("交易回执", receipt);
 
       if (receipt.status !== "success") {
-        setStatus("setCount(5) 已上链，但合约执行失败。当前钱包不是 owner。");
+        setStatus("setCount(5) 已上链，但合约执行失败。");
         return;
       }
 
@@ -277,7 +343,12 @@ function App() {
 
       setStatus(`setCount(5) 已确认，上链哈希: ${hash}`);
     } catch (error) {
+      const decodedError = getDecodedContractError(error);
+
       console.error("SetCount 交易失败", error);
+      if (decodedError) {
+        console.log("SetCount 解码后的合约错误", decodedError);
+      }
       setStatus(getReadableErrorMessage(error));
     } finally {
       setIsWriting(false);
@@ -285,8 +356,6 @@ function App() {
   }
 
   useEffect(() => {
-    let unwatchContractEvent;
-
     loadContractData();
 
     if (window.ethereum) {
@@ -309,46 +378,14 @@ function App() {
       window.ethereum.on("accountsChanged", handleAccountsChanged);
       window.ethereum.on("chainChanged", handleChainChanged);
 
-      unwatchContractEvent = publicClient.watchContractEvent({
-        address: contractAddress,
-        abi,
-        eventName: "CountUpdated",
-        onLogs(logs) {
-          console.log("监听到 CountUpdated 事件", logs);
-          setStatus("监听到 CountUpdated 事件，正在同步最新状态...");
-          loadContractData();
-        },
-      });
-
       return () => {
         window.ethereum.removeListener(
           "accountsChanged",
           handleAccountsChanged,
         );
         window.ethereum.removeListener("chainChanged", handleChainChanged);
-
-        if (unwatchContractEvent) {
-          unwatchContractEvent();
-        }
       };
     }
-
-    unwatchContractEvent = publicClient.watchContractEvent({
-      address: contractAddress,
-      abi,
-      eventName: "CountUpdated",
-      onLogs(logs) {
-        console.log("监听到 CountUpdated 事件", logs);
-        setStatus("监听到 CountUpdated 事件，正在同步最新状态...");
-        loadContractData(); // 收到事件之后重新同步页面状态
-      },
-    });
-
-    return () => {
-      if (unwatchContractEvent) {
-        unwatchContractEvent();
-      }
-    };
   }, []);
 
   return (
@@ -357,8 +394,8 @@ function App() {
         <p className="eyebrow">Minimal DApp</p>
         <h1>Count 控制台</h1>
         <p className="description">
-          现在我们已经能读链，接下来继续用 MetaMask
-          从前端发送交易，并开始处理合约错误。
+          这一轮只收口一件事：让 setCount(5) 失败时，
+          页面能把链上错误翻译成人能看懂的话。
         </p>
 
         <div className="panel">
@@ -374,6 +411,11 @@ function App() {
         <div className="panel">
           <span className="label">owner</span>
           <span className="value">{owner}</span>
+        </div>
+
+        <div className="panel">
+          <span className="label">setCount(5) 预期</span>
+          <span className="value">{getSetCountExpectation()}</span>
         </div>
 
         <div className="actions">
