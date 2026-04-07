@@ -81,4 +81,10 @@ contract MinimalDapp {
         count = count + 1;
         emit CountUpdated(msg.sender, count);
     }
+
+    function increaseBy(uint256 step) public {
+        // 给前端输入框练习用：任何人都可以把 count 增加指定值。
+        count = count + step;
+        emit CountUpdated(msg.sender, count);
+    }
 }

@@ -14,7 +14,7 @@ import "./App.css";
 /**
  * 这是 MinimalDapp.sol 这个合约的地址
  */
-const contractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+const contractAddress = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
 
 const abi = [
   {
@@ -59,6 +59,13 @@ const abi = [
   },
   {
     type: "function",
+    name: "increaseBy",
+    inputs: [{ name: "step", type: "uint256", internalType: "uint256" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
     name: "setCount",
     inputs: [{ name: "newCount", type: "uint256", internalType: "uint256" }],
     outputs: [],
@@ -92,6 +99,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWriting, setIsWriting] = useState(false);
+  const [increaseStep, setIncreaseStep] = useState("2");
 
   async function loadContractData() {
     try {
@@ -355,6 +363,53 @@ function App() {
     }
   }
 
+  async function handleIncreaseBy() {
+    if (!window.ethereum) {
+      setStatus("未检测到 MetaMask");
+      return;
+    }
+
+    if (!account) {
+      setStatus("请先连接钱包");
+      return;
+    }
+
+    if (!increaseStep || Number(increaseStep) < 0) {
+      setStatus("请输入大于等于 0 的增加值");
+      return;
+    }
+
+    try {
+      setIsWriting(true);
+      setStatus(`请在钱包中确认 increaseBy(${increaseStep}) 交易...`);
+
+      const isCorrectChain = await ensureCorrectChain();
+      if (!isCorrectChain) return;
+
+      const walletClient = await createAppWalletClient();
+
+      const hash = await walletClient.writeContract({
+        account,
+        address: contractAddress,
+        abi,
+        functionName: "increaseBy",
+        args: [BigInt(increaseStep)],
+      });
+
+      setStatus(`IncreaseBy 的交易已发送: ${hash}`);
+
+      await publicClient.waitForTransactionReceipt({ hash });
+      // await loadContractData();
+
+      setStatus(`increaseBy(${increaseStep}) 已确认，上链哈希: ${hash}`);
+    } catch (error) {
+      console.error("increaseBy 交易失败", error);
+      setStatus("increaseBy 失败，请检查钱包确认状态或控制台报错");
+    } finally {
+      setIsWriting(false);
+    }
+  }
+
   useEffect(() => {
     let unwatchContractEvent;
 
@@ -416,8 +471,8 @@ function App() {
         <p className="eyebrow">Minimal DApp</p>
         <h1>Count 控制台</h1>
         <p className="description">
-          这一轮只收口一件事：让 setCount(5) 失败时，
-          页面能把链上错误翻译成人能看懂的话。
+          现在页面同时保留两条主线：`setCount(5)` 负责演示权限失败，
+          `increaseBy(step)` 负责练输入框和成功写交易。
         </p>
 
         <div className="panel">
@@ -455,6 +510,22 @@ function App() {
           </button>
           <button onClick={handleSetCount} disabled={isWriting}>
             {isWriting ? "交易处理中..." : "setCount(5)"}
+          </button>
+        </div>
+
+        <div className="panel">
+          <span className="label">increaseBy 输入值</span>
+          <input
+            type="number"
+            min="0"
+            value={increaseStep}
+            onChange={(event) => setIncreaseStep(event.target.value)}
+          />
+        </div>
+
+        <div className="actions">
+          <button onClick={handleIncreaseBy} disabled={isWriting}>
+            {isWriting ? "交易处理中..." : `increaseBy(${increaseStep || 0})`}
           </button>
         </div>
 
