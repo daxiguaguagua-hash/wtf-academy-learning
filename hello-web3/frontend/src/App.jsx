@@ -356,7 +356,20 @@ function App() {
   }
 
   useEffect(() => {
+    let unwatchContractEvent;
+
     loadContractData();
+
+    unwatchContractEvent = publicClient.watchContractEvent({
+      address: contractAddress,
+      abi,
+      eventName: "CountUpdated",
+      onLogs(logs) {
+        console.log("监听到 CountUpdated 事件", logs);
+        setStatus("监听到 CountUpdated 事件，正在同步最新状态...");
+        loadContractData();
+      },
+    });
 
     if (window.ethereum) {
       function handleAccountsChanged(accounts) {
@@ -384,8 +397,17 @@ function App() {
           handleAccountsChanged,
         );
         window.ethereum.removeListener("chainChanged", handleChainChanged);
+        if (unwatchContractEvent) {
+          unwatchContractEvent();
+        }
       };
     }
+
+    return () => {
+      if (unwatchContractEvent) {
+        unwatchContractEvent();
+      }
+    };
   }, []);
 
   return (
