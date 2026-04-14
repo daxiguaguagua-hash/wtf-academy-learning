@@ -11,7 +11,13 @@ contract TransparentProxyDemoScript is Script {
     address public constant USER = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
 
     function run() public {
+        // 命令行要这样写，这里的私钥要和 USER 这个账户 区别开来。USER是第二个账户，那么私钥用第一个。
+        // PRIVATE_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d \
+        // forge script script/TransparentProxyDemo.s.sol:TransparentProxyDemoScript \
+        // --rpc-url http://127.0.0.1:8545 \
+        // --broadcast
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
+        address admin = vm.addr(privateKey);
 
         vm.startBroadcast(privateKey);
 
@@ -22,7 +28,7 @@ contract TransparentProxyDemoScript is Script {
         // 还有参数编码，后面的字节
         // 这里本质上就是：我要调用 initialize(USER, 100) 这个函数，所以要把函数选择器和参数编码成字节数组
         bytes memory initData = abi.encodeWithSignature(
-            // 这里的monory通常用于局部的引用变量。
+            // 这里的memory通常用于局部的引用变量。
             // 而calldata只能用于外部函数输入参数，用于只读变量。
             "initialize(address,uint256)",
             USER,
@@ -31,7 +37,7 @@ contract TransparentProxyDemoScript is Script {
 
         TransparentProxyDemo proxy = new TransparentProxyDemo(
             address(logicV1),
-            msg.sender,
+            admin,
             initData
         );
 
@@ -40,7 +46,7 @@ contract TransparentProxyDemoScript is Script {
         console2.log("logicV1:", address(logicV1));
         console2.log("logicV2:", address(logicV2));
         console2.log("proxy:", address(proxy));
-        console2.log("admin:", msg.sender);
+        console2.log("admin:", admin);
         console2.log("user:", USER);
     }
 }
