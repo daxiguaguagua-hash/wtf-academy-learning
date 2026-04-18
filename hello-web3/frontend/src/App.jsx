@@ -5,15 +5,25 @@ import {
   createPublicClient,
   createWalletClient,
   custom,
+  formatEther,
+  formatGwei,
   http,
 } from "viem";
-import { foundry } from "viem/chains";
+import { sepolia } from "viem/chains";
 import "./App.css";
 
 /**
- * 这是 MessageBoard.sol 当前部署后的合约地址
+ * 通过环境变量注入当前部署到 Sepolia 的 MessageBoard 地址。
  */
-const contractAddress = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
+const contractAddress =
+  import.meta.env.VITE_MESSAGEBOARD_ADDRESS ??
+  "0x0000000000000000000000000000000000000000";
+
+const rpcUrl =
+  import.meta.env.VITE_SEPOLIA_RPC_URL ??
+  "https://ethereum-sepolia-rpc.publicnode.com";
+
+const chainIdFromEnv = import.meta.env.VITE_CHAIN_ID ?? "0xaa36a7";
 
 const abi = [
   {
@@ -59,8 +69,8 @@ const abi = [
 ];
 
 const publicClient = createPublicClient({
-  chain: foundry,
-  transport: http("http://127.0.0.1:8545"),
+  chain: sepolia,
+  transport: http(rpcUrl),
 });
 
 function App() {
@@ -72,6 +82,10 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWriting, setIsWriting] = useState(false);
+  const [lastTxHash, setLastTxHash] = useState("");
+  const [lastGasUsed, setLastGasUsed] = useState("-");
+  const [lastGasPrice, setLastGasPrice] = useState("-");
+  const [lastTxFee, setLastTxFee] = useState("-");
 
   async function loadMessage() {
     try {
@@ -95,7 +109,7 @@ function App() {
       setStatus("读取成功");
     } catch (error) {
       console.error(error);
-      setStatus("读取失败，请检查本地链和 MessageBoard 合约地址");
+      setStatus("读取失败，请检查 Sepolia RPC 和 MessageBoard 合约地址");
     } finally {
       setIsLoading(false);
     }
@@ -128,8 +142,17 @@ function App() {
 
   async function ensureCorrectChain() {
     const chainId = await window.ethereum.request({ method: "eth_chainId" });
-    if (chainId !== "0x7a69") {
-      setStatus("请先把 MetaMask 切换到 Anvil Local 网络");
+    const chainIdHex = `0x${Number(chainIdFromEnv).toString(16)}`;
+    if (chainId !== chainIdHex) {
+      // console.log(
+      //   "chainId:",
+      //   chainId,
+      //   "expected:",
+      //   chainIdFromEnv,
+      //   "chainIdHex:",
+      //   chainIdHex,
+      // );
+      setStatus("请先把 MetaMask 切换到 Ethereum Sepolia 网络");
       return false;
     }
 
@@ -138,7 +161,7 @@ function App() {
 
   async function createAppWalletClient() {
     return createWalletClient({
-      chain: foundry,
+      chain: sepolia,
       transport: custom(window.ethereum),
     });
   }
@@ -181,6 +204,11 @@ function App() {
       return;
     }
 
+    if (contractAddress === "0x0000000000000000000000000000000000000000") {
+      setStatus("请先在 .env 中配置 VITE_MESSAGEBOARD_ADDRESS");
+      return;
+    }
+
     try {
       setIsWriting(true);
       setStatus("请在钱包中确认 setMessage(string) 交易...");
@@ -198,9 +226,18 @@ function App() {
         args: [draftMessage],
       });
 
+      setLastTxHash(hash);
       setStatus(`交易已发送: ${hash}`);
 
-      await publicClient.waitForTransactionReceipt({ hash });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      const gasUsed = receipt.gasUsed;
+      const gasPrice = receipt.effectiveGasPrice ?? 0n;
+      const txFee = gasUsed * gasPrice;
+
+      setLastGasUsed(gasUsed.toString());
+      setLastGasPrice(`${formatGwei(gasPrice)} gwei`);
+      setLastTxFee(`${formatEther(txFee)} ETH`);
+
       await loadMessage();
 
       setStatus(`setMessage(string) 已确认，上链哈希: ${hash}`);
@@ -216,6 +253,12 @@ function App() {
     let unwatchContractEvent;
 
     console.log("开始监听 MessageUpdated 事件");
+
+    if (contractAddress === "0x0000000000000000000000000000000000000000") {
+      setStatus("请先在 .env 中配置 VITE_MESSAGEBOARD_ADDRESS");
+      return;
+    }
+
     loadMessage();
 
     unwatchContractEvent = publicClient.watchContractEvent({
@@ -329,6 +372,29 @@ function App() {
         <div className="panel">
           <span className="label">状态消息</span>
           <span className="value">{status}</span>
+        </div>
+
+        <div className="panel panel-column">
+          <span className="label">最近一次交易</span>
+          <span className="value">
+            {lastTxHash ? (
+              <>
+                <strong>交易哈希：</strong>
+                {lastTxHash}
+                <br />
+                <strong>gasUsed：</strong>
+                {lastGasUsed}
+                <br />
+                <strong>gasPrice：</strong>
+                {lastGasPrice}
+                <br />
+                <strong>总花费：</strong>
+                {lastTxFee}
+              </>
+            ) : (
+              "还没有发送过交易"
+            )}
+          </span>
         </div>
       </section>
     </main>
