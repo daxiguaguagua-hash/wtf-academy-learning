@@ -11,12 +11,12 @@ contract MinimalDESDemo {
     mapping(address => uint256) public debt; // 债务 记录每个人借了多少DES
 
     uint256 public ethPrice = 2000; // ETH 价格 1eth=2000$
-    uint256 public constant LIQUIDATION_THRESHOLD = 75;
+    uint256 public constant LIQUIDATION_THRESHOLD = 75; // 阈值和门槛
     uint256 public constant LIQUIDATION_PRECISION = 100; // 精准度
 
     event DepositCollateral(address indexed user, uint256 amount);
     event Mint(address indexed user, uint256 amount);
-    event Liquidate(address indexed liquidator, address indexed user);
+    event Liquidate(address indexed liquidator, address indexed user); // 清算
 
     function depositCollateral() external payable {
         require(msg.value > 0, "zero collateral");
